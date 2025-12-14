@@ -1,6 +1,5 @@
 package gym.Modelo;
 
-
 import java.time.LocalDateTime;
 
 // Clase que contiene las entidades del sistema
@@ -468,7 +467,8 @@ public class Entidades {
     public static class Asignacion {
         private int idAsignacion;
         private int idUsuario;
-        private int idEntrenador;
+        private int idEntrenador; // ID de la tabla 'entrenador'
+        private int idEntrenadorUsuario; // ID de la tabla 'usuario' del entrenador
         private int idRutina;
         private String estado;
         private LocalDateTime fechaSolicitud;
@@ -478,41 +478,44 @@ public class Entidades {
         private boolean activa;
         private String nombreUsuario;
         private String emailUsuario;
-        
+
         // Getters y Setters
         public int getIdAsignacion() { return idAsignacion; }
         public void setIdAsignacion(int id) { this.idAsignacion = id; }
-        
+
         public int getIdUsuario() { return idUsuario; }
         public void setIdUsuario(int id) { this.idUsuario = id; }
-        
+
         public int getIdEntrenador() { return idEntrenador; }
         public void setIdEntrenador(int id) { this.idEntrenador = id; }
+
+        public int getIdEntrenadorUsuario() { return idEntrenadorUsuario; }
+        public void setIdEntrenadorUsuario(int id) { this.idEntrenadorUsuario = id; }
         
         public int getIdRutina() { return idRutina; }
         public void setIdRutina(int id) { this.idRutina = id; }
-        
+
         public String getEstado() { return estado; }
         public void setEstado(String estado) { this.estado = estado; }
-        
+
         public LocalDateTime getFechaSolicitud() { return fechaSolicitud; }
         public void setFechaSolicitud(LocalDateTime fecha) { this.fechaSolicitud = fecha; }
-        
+
         public LocalDateTime getFechaAsignacion() { return fechaAsignacion; }
         public void setFechaAsignacion(LocalDateTime fecha) { this.fechaAsignacion = fecha; }
-        
+
         public String getMensajeSolicitud() { return mensajeSolicitud; }
         public void setMensajeSolicitud(String mensaje) { this.mensajeSolicitud = mensaje; }
-        
+
         public String getInstruccionesEspeciales() { return instruccionesEspeciales; }
         public void setInstruccionesEspeciales(String instrucciones) { this.instruccionesEspeciales = instrucciones; }
-        
+
         public boolean isActiva() { return activa; }
         public void setActiva(boolean activa) { this.activa = activa; }
-        
+
         public String getNombreUsuario() { return nombreUsuario; }
         public void setNombreUsuario(String nombre) { this.nombreUsuario = nombre; }
-        
+
         public String getEmailUsuario() { return emailUsuario; }
         public void setEmailUsuario(String email) { this.emailUsuario = email; }
     }

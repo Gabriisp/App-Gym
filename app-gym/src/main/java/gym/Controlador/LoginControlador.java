@@ -10,6 +10,7 @@ import gym.Vista.VistaLogin;
 public class LoginControlador {
     
     private VistaLogin vistaLogin;
+    
     // Constructor
     public LoginControlador() {
         this.vistaLogin = new VistaLogin();
@@ -21,61 +22,49 @@ public class LoginControlador {
             
             if (opcion == 0) {
                 registrarUsuario();
-            } else if (opcion == 1) {  
-                loginUsuario();     
+            } else if (opcion == 1) {    
+                loginUsuario();        
             } else if (opcion == -1 || opcion == JOptionPane.CLOSED_OPTION) {
                 System.exit(0);
             }
             
         } catch (Exception e) {
-            vistaLogin.mostrarError("Error: " + e.getMessage());
-            iniciar(); 
+            vistaLogin.mostrarError("Error en el sistema: " + e.getMessage());
+            iniciar();    
         }
     }
+    
     // Registrar un nuevo usuario
-   private void registrarUsuario() throws SQLException {
-    String tipo = vistaLogin.mostrarSeleccionTipo();
-    
-    if (tipo == null) {
-        iniciar();
-        return;
-    }
-
-    String[] datos = vistaLogin.mostrarRegistro(tipo);
-    
-    if (datos == null) {
-        iniciar();
-        return;
-    }
-    
-    if (datos[0].trim().isEmpty() || datos[1].trim().isEmpty() || 
-        datos[2].trim().isEmpty() || datos[3].trim().isEmpty()) {
-        vistaLogin.mostrarError("Todos los campos son obligatorios");
-        registrarUsuario();
-        return;
-    }
-    
-    Entidades.Usuario nuevo = new Entidades.Usuario(
-        datos[0].trim(), 
-        datos[1].trim().toLowerCase(), 
-        datos[2], 
-        datos[3]
-    );
-    
-    if (GestorBD.registrarUsuario(nuevo)) {
-        if ("entrenador".equals(tipo)) {
-            if (GestorBD.registrarEntrenador(nuevo.getIdUsuario())) {
-                vistaLogin.mostrarMensaje("¡Entrenador registrado exitosamente!");
-            }
-        } else {
-            vistaLogin.mostrarMensaje("Registro exitoso, ahora inicia sesión");
+    private void registrarUsuario() throws SQLException {
+        String tipo = vistaLogin.mostrarSeleccionTipo();
+        
+        if (tipo == null) {
+            iniciar();
+            return;
         }
-        loginUsuario();
-    } else {
-        vistaLogin.mostrarError("Error en el registro - El email ya existe");
-        registrarUsuario();
+
+        String[] datos = vistaLogin.mostrarRegistro(tipo);
+        
+        if (datos == null) {
+            iniciar();
+            return;
+        }
+                Entidades.Usuario nuevo = new Entidades.Usuario(
+            datos[0].trim(),    
+            datos[1].trim().toLowerCase(),    
+            datos[2],    
+            datos[3]
+        );
+        
+        if (GestorBD.registrarUsuario(nuevo)) {
+            vistaLogin.mostrarMensaje("Registro exitoso, ahora inicia sesión");
+            loginUsuario();
+        } else {
+            vistaLogin.mostrarError("Error en el registro - El email ya existe");
+            registrarUsuario();
+        }
     }
-}
+    
     // Iniciar sesión de un usuario existente
     private void loginUsuario() throws SQLException {
         String[] credenciales = vistaLogin.mostrarLogin();
@@ -91,9 +80,9 @@ public class LoginControlador {
             vistaLogin.mostrarMensaje("¡Bienvenido " + usuario.getNombre() + "!");
             
             if ("entrenador".equals(usuario.getTipo())) {
-                new EntrenadorControlador(usuario).mostrarMenuEntrenador(); 
+                new EntrenadorControlador(usuario).mostrarMenuEntrenador();    
             } else {
-                new UsuarioControlador(usuario).iniciar();   
+                new UsuarioControlador(usuario).iniciar();    
             }
         } else {
             vistaLogin.mostrarError("Credenciales incorrectas");

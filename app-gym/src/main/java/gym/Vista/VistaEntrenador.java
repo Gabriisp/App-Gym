@@ -1,16 +1,13 @@
 package gym.Vista;
 
 import java.awt.*;
-import java.sql.SQLException;
 import java.util.List;
-
 import javax.swing.*;
-
-import gym.Modelo.GestorBD;
 import gym.Modelo.Entidades;
 
 public class VistaEntrenador {
-
+    // CORRECCIÓN: Eliminada la dependencia directa a GestorBD.
+    
     public int mostrarMenuEntrenador(String nombre) {
         JDialog dialog = new JDialog();
         dialog.setTitle("Menú Entrenador - Olympus");
@@ -41,7 +38,7 @@ public class VistaEntrenador {
                 "Ver mis usuarios asignados",
                 "Crear rutina para cliente",
                 "Ver/Editar ejercicios de rutina",
-                "Eliminar rutina",
+                "Eliminar rutina de cliente",
                 "Ver progreso clientes",
                 "Gestionar Solicitudes",
                 "Ver rutinas de cliente específico",
@@ -82,9 +79,35 @@ public class VistaEntrenador {
 
         return resultado[0];
     }
-    // Mostrar selección de solicitudes
+    
+    // El controlador ahora pasa el nombre del creador (ya no se llama a GestorBD aquí)
+    public void mostrarRutinas(List<Entidades.Rutina> rutinas, List<String> nombresClientes) {
+        if (rutinas.isEmpty()) {
+            mostrarMensaje("No hay rutinas creadas.");
+            return;
+        }
 
+        StringBuilder sb = new StringBuilder("RUTINAS DE TUS CLIENTES:\n\n");
+        for (int i = 0; i < rutinas.size(); i++) {
+            Entidades.Rutina r = rutinas.get(i);
+            String nombreCliente = (i < nombresClientes.size()) ? nombresClientes.get(i) : "Cliente Desconocido";
 
+            sb.append("• ").append(r.getNombre())
+                    .append("\n  Descripción: ").append(r.getDescripcion())
+                    .append("\n  Cliente: ").append(nombreCliente)
+                    .append("\n  Creada: ").append(r.getFechaCreacion().toLocalDate())
+                    .append("\n  Activa: ").append(r.isActiva() ? "Sí" : "No")
+                    .append("\n\n");
+        }
+
+        JTextArea area = new JTextArea(sb.toString());
+        area.setEditable(false);
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setPreferredSize(new Dimension(500, 400));
+
+        JOptionPane.showMessageDialog(null, scroll, "Rutinas de Clientes", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
     public int mostrarSeleccionRutinaConOpciones(List<Entidades.Rutina> rutinas) {
         if (rutinas.isEmpty()) {
             mostrarMensaje("No hay rutinas disponibles.");
@@ -96,7 +119,7 @@ public class VistaEntrenador {
             opciones[i] = rutinas.get(i).getNombre() + " - " + rutinas.get(i).getDescripcion();
         }
 
-        int seleccion = JOptionPane.showOptionDialog(
+        return JOptionPane.showOptionDialog(
                 null,
                 "Selecciona una rutina para ver sus ejercicios:",
                 "Rutinas del Cliente - Ver Ejercicios",
@@ -105,11 +128,8 @@ public class VistaEntrenador {
                 null,
                 opciones,
                 opciones[0]);
-
-        return seleccion;
     }
 
-    // Mostrar diálogo para crear nuevo ejercicio
     public String[] mostrarCrearEjercicioNuevo() {
         JPanel panel = new JPanel(new GridLayout(4, 2, 10, 10));
 
@@ -169,7 +189,6 @@ public class VistaEntrenador {
                 opciones[0]);
     }
 
-    // Mostrar opciones para una solicitud
     public int mostrarOpcionesSolicitud(Entidades.Asignacion solicitud) {
         Object[] opciones = { "Aceptar Solicitud", "Rechazar Solicitud" };
 
@@ -199,7 +218,6 @@ public class VistaEntrenador {
                 opciones[0]);
     }
 
-    // MMostrar menú 
     public int mostrarMenuEjerciciosRutina(String nombreRutina) {
         JDialog dialog = new JDialog();
         dialog.setTitle("Gestión de Ejercicios - " + nombreRutina);
@@ -266,7 +284,7 @@ public class VistaEntrenador {
 
         return resultado[0];
     }
-    // Mostrar selección de ejercicio para borrar
+    
     public int mostrarSeleccionEjercicioParaBorrar(List<Entidades.EjercicioRutina> ejercicios) {
         if (ejercicios.isEmpty())
             return -1;
@@ -282,13 +300,13 @@ public class VistaEntrenador {
                 JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
                 null, opciones, opciones[0]);
     }
-    // Mostrar mensaje de información
+    
     public boolean confirmarEliminacion(String mensaje) {
         int respuesta = JOptionPane.showConfirmDialog(null, mensaje, "Confirmar Eliminación",
                 JOptionPane.YES_NO_OPTION);
         return respuesta == JOptionPane.YES_OPTION;
     }
-    // Mostrar lista de usuarios asignados
+    
     public void mostrarUsuarios(List<Entidades.Usuario> usuarios) {
         if (usuarios.isEmpty()) {
             mostrarMensaje("No tienes usuarios asignados.");
@@ -310,41 +328,7 @@ public class VistaEntrenador {
 
         JOptionPane.showMessageDialog(null, scroll, "Mis Usuarios Asignados", JOptionPane.INFORMATION_MESSAGE);
     }
-    // Mostrar lista de rutinas de clientes
-    public void mostrarRutinas(List<Entidades.Rutina> rutinas) {
-        if (rutinas.isEmpty()) {
-            mostrarMensaje("No hay rutinas creadas.");
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder("RUTINAS DE TUS CLIENTES:\n\n");
-        for (Entidades.Rutina r : rutinas) {
-            try {
-                String nombreUsuario = GestorBD.obtenerNombreUsuarioPorId(r.getIdUsuarioCreador());
-
-                sb.append("• ").append(r.getNombre())
-                        .append("\n   Descripción: ").append(r.getDescripcion())
-                        .append("\n   Cliente: ").append(nombreUsuario)
-                        .append("\n   Creada: ").append(r.getFechaCreacion().toLocalDate())
-                        .append("\n   Activa: ").append(r.isActiva() ? "Sí" : "No")
-                        .append("\n\n");
-            } catch (SQLException e) {
-                sb.append("• ").append(r.getNombre())
-                        .append(" - ").append(r.getDescripcion())
-                        .append(" (Creada por: Usuario ").append(r.getIdUsuarioCreador()).append(")")
-                        .append(" - ").append(r.getFechaCreacion().toLocalDate())
-                        .append("\n");
-            }
-        }
-
-        JTextArea area = new JTextArea(sb.toString());
-        area.setEditable(false);
-        JScrollPane scroll = new JScrollPane(area);
-        scroll.setPreferredSize(new Dimension(500, 400));
-
-        JOptionPane.showMessageDialog(null, scroll, "Rutinas de Clientes", JOptionPane.INFORMATION_MESSAGE);
-    }
-    // Mostrar selección de usuario
+    
     public int mostrarSeleccionUsuario(List<Entidades.Usuario> usuarios) {
         if (usuarios.isEmpty()) {
             mostrarMensaje("No hay usuarios disponibles.");
@@ -366,7 +350,7 @@ public class VistaEntrenador {
                 opciones,
                 opciones[0]);
     }
-    // Mostrar selección de rutina
+    
     public int mostrarSeleccionRutina(List<Entidades.Rutina> rutinas) {
         if (rutinas.isEmpty()) {
             mostrarMensaje("No hay rutinas disponibles.");
@@ -388,7 +372,7 @@ public class VistaEntrenador {
                 opciones,
                 opciones[0]);
     }
-    // Mostrar mensaje de error
+    
     public void mostrarEjerciciosRutina(List<Entidades.EjercicioRutina> ejercicios) {
         if (ejercicios.isEmpty()) {
             mostrarMensaje("Esta rutina no tiene ejercicios.");
@@ -431,180 +415,32 @@ public class VistaEntrenador {
                 opciones[0]);
     }
 
-    // Mostrar progreso completo de un cliente
-    public void mostrarProgresoCompletoCliente(List<Entidades.Entrenamiento> entrenamientos,
-            List<Entidades.Ejercicio> ejercicios,
-            Entidades.Usuario cliente) {
-
+    // El controlador ahora pasa los datos ya procesados para mostrarlos
+    public void mostrarProgresoCompletoCliente(String resumenGeneral, String progresoEjercicio) {
         JDialog dialog = new JDialog();
-        dialog.setTitle("Progreso Completo - " + cliente.getNombre());
+        dialog.setTitle("Progreso Completo de Cliente");
         dialog.setModal(true);
         dialog.setLayout(new BorderLayout());
         dialog.setPreferredSize(new Dimension(900, 700));
 
         JTabbedPane tabbedPane = new JTabbedPane();
+        
+        JTextArea areaResumen = new JTextArea(resumenGeneral);
+        areaResumen.setEditable(false);
+        areaResumen.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        tabbedPane.addTab("Historial/Estadísticas", new JScrollPane(areaResumen));
 
-        JPanel panelEntrenamientos = new JPanel(new BorderLayout());
-        StringBuilder sbEntrenamientos = new StringBuilder();
-        sbEntrenamientos.append("HISTORIAL COMPLETO DE ENTRENAMIENTOS - ").append(cliente.getNombre()).append("\n");
-        sbEntrenamientos.append("=".repeat(60)).append("\n\n");
-
-        int totalEntrenamientos = entrenamientos.size();
-        double totalHoras = entrenamientos.stream().mapToDouble(Entidades.Entrenamiento::getDuracionHoras).sum();
-        double promedioHoras = totalEntrenamientos > 0 ? totalHoras / totalEntrenamientos : 0;
-
-        sbEntrenamientos.append("RESUMEN: ").append(totalEntrenamientos).append(" entrenamientos | ")
-                .append(String.format("%.1f", totalHoras)).append(" horas totales | ")
-                .append(String.format("%.1f", promedioHoras)).append(" horas promedio\n\n");
-
-        for (Entidades.Entrenamiento e : entrenamientos) {
-            sbEntrenamientos.append(" ").append(e.getFechaEntrenamiento().toLocalDate()).append("\n");
-            sbEntrenamientos.append("Duración: ").append(String.format("%.2f", e.getDuracionHoras()))
-                    .append(" horas\n");
-            sbEntrenamientos.append("Notas: ").append(e.getNotas() != null ? e.getNotas() : "Sin notas").append("\n");
-            sbEntrenamientos.append("   ").append("-".repeat(40)).append("\n\n");
-        }
-
-        JTextArea areaEntrenamientos = new JTextArea(sbEntrenamientos.toString());
-        areaEntrenamientos.setEditable(false);
-        areaEntrenamientos.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        JScrollPane scrollEntrenamientos = new JScrollPane(areaEntrenamientos);
-        panelEntrenamientos.add(scrollEntrenamientos, BorderLayout.CENTER);
-
-
-        JPanel panelProgreso = new JPanel(new BorderLayout());
-        JPanel panelSeleccionEjercicio = new JPanel(new FlowLayout());
-        JComboBox<String> comboEjercicios = new JComboBox<>();
-        JTextArea areaProgreso = new JTextArea();
+        JTextArea areaProgreso = new JTextArea(progresoEjercicio);
         areaProgreso.setEditable(false);
         areaProgreso.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        for (Entidades.Ejercicio ejercicio : ejercicios) {
-            comboEjercicios.addItem(ejercicio.getNombre());
-        }
-
-        comboEjercicios.addActionListener(e -> {
-            if (comboEjercicios.getSelectedIndex() >= 0) {
-                try {
-                    Entidades.Ejercicio ejercicioSeleccionado = ejercicios.get(comboEjercicios.getSelectedIndex());
-                    List<Entidades.ProgresoEjercicio> progreso = GestorBD.obtenerProgresoEjercicio(
-                            cliente.getIdUsuario(), ejercicioSeleccionado.getIdEjercicio());
-
-                    StringBuilder sbProgreso = new StringBuilder();
-                    sbProgreso.append("PROGRESO DETALLADO: ").append(ejercicioSeleccionado.getNombre()).append("\n");
-                    sbProgreso.append("Cliente: ").append(cliente.getNombre()).append("\n");
-                    sbProgreso.append("=".repeat(70)).append("\n\n");
-                    sbProgreso.append(String.format("%-12s | %-10s | %-12s | %-8s\n",
-                            "FECHA", "PESO (kg)", "REPETICIONES", "SERIES"));
-                    sbProgreso.append("-".repeat(70)).append("\n");
-
-                    for (Entidades.ProgresoEjercicio p : progreso) {
-                        sbProgreso.append(String.format("%-12s | %-10.1f | %-12d | %-8d\n",
-                                p.getFecha().toLocalDate(),
-                                p.getPesoReal(),
-                                p.getRepeticionesReales(),
-                                p.getSeriesReales()));
-                    }
-
-                    if (progreso.isEmpty()) {
-                        sbProgreso.append("\n No hay registros para este ejercicio.");
-                    } else {
-                        sbProgreso.append("\n").append("-".repeat(70)).append("\n");
-                        sbProgreso.append(" Total de sesiones: ").append(progreso.size()).append("\n");
-
-                        double avgPeso = progreso.stream().mapToDouble(Entidades.ProgresoEjercicio::getPesoReal)
-                                .average().orElse(0);
-                        double avgReps = progreso.stream()
-                                .mapToDouble(Entidades.ProgresoEjercicio::getRepeticionesReales).average().orElse(0);
-                        double avgSeries = progreso.stream().mapToDouble(Entidades.ProgresoEjercicio::getSeriesReales)
-                                .average().orElse(0);
-
-                        sbProgreso.append(" Promedios: ").append(String.format("%.1f", avgPeso)).append(" kg | ")
-                                .append(String.format("%.1f", avgReps)).append(" reps | ")
-                                .append(String.format("%.1f", avgSeries)).append(" series\n");
-
-                        
-                        if (progreso.size() > 1) {
-                            Entidades.ProgresoEjercicio primera = progreso.get(progreso.size() - 1); 
-                            Entidades.ProgresoEjercicio ultima = progreso.get(0);
-
-                            double mejoraPeso = ultima.getPesoReal() - primera.getPesoReal();
-                            double mejoraReps = ultima.getRepeticionesReales() - primera.getRepeticionesReales();
-
-                            sbProgreso.append(" Mejora desde el inicio: ");
-                            if (mejoraPeso > 0)
-                                sbProgreso.append("+").append(String.format("%.1f", mejoraPeso)).append("kg ");
-                            if (mejoraReps > 0)
-                                sbProgreso.append("+").append(String.format("%.0f", mejoraReps)).append("reps");
-                            if (mejoraPeso <= 0 && mejoraReps <= 0)
-                                sbProgreso.append("Sin mejora significativa");
-                            sbProgreso.append("\n");
-                        }
-                    }
-
-                    areaProgreso.setText(sbProgreso.toString());
-
-                } catch (SQLException ex) {
-                    mostrarError("Error al cargar progreso: " + ex.getMessage());
-                }
-            }
-        });
-
-        panelSeleccionEjercicio.add(new JLabel("Selecciona ejercicio:"));
-        panelSeleccionEjercicio.add(comboEjercicios);
-        panelProgreso.add(panelSeleccionEjercicio, BorderLayout.NORTH);
-        panelProgreso.add(new JScrollPane(areaProgreso), BorderLayout.CENTER);
-
-        JPanel panelEstadisticas = new JPanel(new BorderLayout());
-        StringBuilder sbEstadisticas = new StringBuilder();
-        sbEstadisticas.append("ESTADÍSTICAS GENERALES - ").append(cliente.getNombre()).append("\n");
-        sbEstadisticas.append("=".repeat(50)).append("\n\n");
-
-        sbEstadisticas.append("RESUMEN DE ENTRENAMIENTO:\n");
-        sbEstadisticas.append("- Total de entrenamientos: ").append(totalEntrenamientos).append("\n");
-        sbEstadisticas.append("- Tiempo total entrenado: ").append(String.format("%.2f", totalHoras))
-                .append(" horas\n");
-        sbEstadisticas.append("- Promedio por entrenamiento: ").append(String.format("%.2f", promedioHoras))
-                .append(" horas\n");
-        sbEstadisticas.append("- Ejercicios diferentes realizados: ").append(ejercicios.size()).append("\n");
-
-        long diasConsecutivos = calcularDiasConsecutivos(entrenamientos);
-        sbEstadisticas.append("- Días consecutivos entrenando: ").append(diasConsecutivos).append("\n");
-        if (!entrenamientos.isEmpty()) {
-            sbEstadisticas.append("- Último entrenamiento: ")
-                    .append(entrenamientos.get(0).getFechaEntrenamiento().toLocalDate()).append("\n");
-        }
-        sbEstadisticas.append("\n");
-
-        sbEstadisticas.append("EJERCICIOS REALIZADOS:\n");
-        for (Entidades.Ejercicio ej : ejercicios) {
-            sbEstadisticas.append("- ").append(ej.getNombre()).append(" (").append(ej.getGrupoMuscular()).append(")\n");
-        }
-
-        sbEstadisticas.append("\n GRUPOS MUSCULARES TRABAJADOS:\n");
-        ejercicios.stream()
-                .map(Entidades.Ejercicio::getGrupoMuscular)
-                .distinct()
-                .forEach(grupo -> sbEstadisticas.append("- ").append(grupo).append("\n"));
-
-        JTextArea areaEstadisticas = new JTextArea(sbEstadisticas.toString());
-        areaEstadisticas.setEditable(false);
-        areaEstadisticas.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        panelEstadisticas.add(new JScrollPane(areaEstadisticas), BorderLayout.CENTER);
-
-        tabbedPane.addTab("Historial", panelEntrenamientos);
-        tabbedPane.addTab("Progreso por Ejercicio", panelProgreso);
-        tabbedPane.addTab("Estadísticas", panelEstadisticas);
-
+        tabbedPane.addTab("Progreso por Ejercicio", new JScrollPane(areaProgreso));
+        
         dialog.add(tabbedPane, BorderLayout.CENTER);
         dialog.pack();
         dialog.setLocationRelativeTo(null);
         dialog.setVisible(true);
-
-        if (!ejercicios.isEmpty()) {
-            comboEjercicios.setSelectedIndex(0);
-        }
     }
-    // Mostrar resumen general de todos los clientes
+    
     public void mostrarResumenGeneral(String resumen) {
         JTextArea area = new JTextArea(resumen);
         area.setEditable(false);
@@ -614,28 +450,7 @@ public class VistaEntrenador {
 
         JOptionPane.showMessageDialog(null, scroll, "Resumen General de Clientes", JOptionPane.INFORMATION_MESSAGE);
     }
-
-    private long calcularDiasConsecutivos(List<Entidades.Entrenamiento> entrenamientos) {
-        if (entrenamientos.isEmpty())
-            return 0;
-
-        entrenamientos.sort((e1, e2) -> e2.getFechaEntrenamiento().compareTo(e1.getFechaEntrenamiento()));
-
-        long consecutivos = 0;
-        java.time.LocalDate fechaActual = java.time.LocalDate.now();
-
-        for (Entidades.Entrenamiento e : entrenamientos) {
-            java.time.LocalDate fechaEntreno = e.getFechaEntrenamiento().toLocalDate();
-
-            if (fechaEntreno.equals(fechaActual.minusDays(consecutivos))) {
-                consecutivos++;
-            } else {
-                break;
-            }
-        }
-        return consecutivos;
-    }
-    // Mostrar diálogo para agregar ejercicio a rutina
+    
     public String[] mostrarAgregarEjercicioRutina(List<Entidades.Ejercicio> ejerciciosDisponibles) {
         JPanel panel = new JPanel(new GridLayout(6, 2, 10, 10));
 
@@ -675,8 +490,8 @@ public class VistaEntrenador {
                 int descanso = Integer.parseInt(txtDescanso.getText().trim());
                 int orden = Integer.parseInt(txtOrden.getText().trim());
 
-                if (series <= 0 || repeticiones <= 0 || descanso <= 0 || orden <= 0) {
-                    mostrarError("Todos los valores deben ser positivos");
+                if (series <= 0 || repeticiones <= 0 || descanso < 0 || orden <= 0) {
+                    mostrarError("Series, repeticiones y orden deben ser positivos. El descanso debe ser >= 0.");
                     return null;
                 }
 

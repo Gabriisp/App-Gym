@@ -6,7 +6,8 @@ import java.util.List;
 import gym.Modelo.Entidades.*;
 
 public class GestorBD {
-    private static final String url = "jdbc:mysql://localhost:3306/gym_app";
+    // Nombre de la BD "Olympus"
+    private static final String url = "jdbc:mysql://localhost:3306/Olympus";
     private static final String user = "root";
     private static final String pass = "1234";
 
@@ -18,6 +19,29 @@ public class GestorBD {
             throw new SQLException("Driver no encontrado", e);
         }
     }
+
+    //  Obtiene el ID real del entrenador a partir de su ID de usuario
+    public static int obtenerIdEntrenadorReal(int idEntrenadorUsuario) throws SQLException {
+        String sql = "SELECT id_entrenador FROM entrenador WHERE id_usuario = ?";
+        try (Connection c = getConnection(); 
+             PreparedStatement p = c.prepareStatement(sql)) {
+            p.setInt(1, idEntrenadorUsuario);
+            ResultSet rs = p.executeQuery();
+            return rs.next() ? rs.getInt("id_entrenador") : -1;
+        }
+    }
+    
+    //  Obtiene el ID de usuario del entrenador a partir de su ID real
+    public static int obtenerIdEntrenadorUsuario(int idEntrenadorReal) throws SQLException {
+        String sql = "SELECT id_usuario FROM entrenador WHERE id_entrenador = ?";
+        try (Connection c = getConnection(); 
+             PreparedStatement p = c.prepareStatement(sql)) {
+            p.setInt(1, idEntrenadorReal);
+            ResultSet rs = p.executeQuery();
+            return rs.next() ? rs.getInt("id_usuario") : -1;
+        }
+    }
+
 
     // Usuarios
     public static Usuario login(String email, String password) throws SQLException {
@@ -32,6 +56,7 @@ public class GestorBD {
     }
 
     public static boolean registrarUsuario(Usuario u) throws SQLException {
+        // El registro de Entrenador es manejado por el Trigger
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement(
                         "INSERT INTO usuario (nombre, email, password, tipo) VALUES (?,?,?,?)",
@@ -65,12 +90,21 @@ public class GestorBD {
 
     public static List<Usuario> obtenerTodosEntrenadores() throws SQLException {
         List<Usuario> lista = new ArrayList<>();
+        String sql = "SELECT u.* FROM usuario u JOIN entrenador e ON u.id_usuario = e.id_usuario WHERE u.activo=TRUE AND e.activo=TRUE";
+        try (Connection c = getConnection();
+             Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery(sql)) {
+            while (rs.next())
+                lista.add(mapUsuario(rs));
+        }
+        return lista;
+    }
+
+    public static List<Usuario> obtenerTodosUsuarios() throws SQLException {
+        List<Usuario> lista = new ArrayList<>();
         try (Connection c = getConnection();
                 Statement s = c.createStatement();
-                ResultSet rs = s.executeQuery(
-                        "SELECT u.* FROM usuario u " +
-                                "JOIN entrenador e ON u.id_usuario = e.id_usuario " +
-                                "WHERE u.activo=TRUE AND e.activo=TRUE")) {
+                ResultSet rs = s.executeQuery("SELECT * FROM usuario WHERE activo=TRUE")) {
             while (rs.next())
                 lista.add(mapUsuario(rs));
         }
@@ -80,58 +114,31 @@ public class GestorBD {
     // Solicitudes de entrenador
     public static boolean enviarSolicitudEntrenador(int idUsuario, int idEntrenadorUsuario, String mensaje)
             throws SQLException {
-        try (Connection c = getConnection()) {
+        int idEntrenadorReal = obtenerIdEntrenadorReal(idEntrenadorUsuario);
+        if (idEntrenadorReal == -1) return false;
 
-            int idEntrenadorReal = -1;
-            String sqlGetEntrenador = "SELECT id_entrenador FROM entrenador WHERE id_usuario = ?";
-            try (PreparedStatement pGet = c.prepareStatement(sqlGetEntrenador)) {
-                pGet.setInt(1, idEntrenadorUsuario);
-                ResultSet rs = pGet.executeQuery();
-                if (rs.next()) {
-                    idEntrenadorReal = rs.getInt("id_entrenador");
-                }
-            }
-            if (idEntrenadorReal == -1) {
-                return false;
-            }
-            try (PreparedStatement p = c.prepareStatement(
-                    "INSERT INTO asigna (id_entrenador, id_usuario, id_rutina, estado, fecha_solicitud, mensaje_solicitud) VALUES (?,?,NULL,?,NOW(),?)")) {
-                p.setInt(1, idEntrenadorReal);
-                p.setInt(2, idUsuario);
-                p.setString(3, "pendiente");
-                p.setString(4, mensaje);
-                return p.executeUpdate() > 0;
-            }
+        String sql = "INSERT INTO asigna (id_entrenador, id_usuario, estado, fecha_solicitud, mensaje_solicitud) VALUES (?,?,?,NOW(),?)";
+        try (Connection c = getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
+            p.setInt(1, idEntrenadorReal);
+            p.setInt(2, idUsuario);
+            p.setString(3, "pendiente");
+            p.setString(4, mensaje);
+            return p.executeUpdate() > 0;
         }
     }
 
-    // Obtener solicitudes pendientes para un entrenador
-    public static List<Asignacion> obtenerSolicitudesPendientes(int idEntrenador) throws SQLException {
+    public static List<Asignacion> obtenerSolicitudesPendientes(int idEntrenadorUsuario) throws SQLException {
         List<Asignacion> lista = new ArrayList<>();
+        int idEntrenadorReal = obtenerIdEntrenadorReal(idEntrenadorUsuario);
+        if (idEntrenadorReal == -1) return lista;
 
-        int idEntrenadorReal = -1;
-        try (Connection c = getConnection();
-                PreparedStatement pGet = c
-                        .prepareStatement("SELECT id_entrenador FROM entrenador WHERE id_usuario = ?")) {
-            pGet.setInt(1, idEntrenador);
-            ResultSet rs = pGet.executeQuery();
-            if (rs.next()) {
-                idEntrenadorReal = rs.getInt("id_entrenador");
-            }
-        }
-
-        if (idEntrenadorReal == -1) {
-            return lista;
-        }
-
-        String sql = "SELECT a.*, u.nombre as nombre_usuario, u.email as email_usuario " +
-                "FROM asigna a " +
-                "JOIN usuario u ON a.id_usuario = u.id_usuario " +
-                "WHERE a.id_entrenador = ? AND a.estado = 'pendiente' " +
-                "ORDER BY a.fecha_solicitud DESC";
+        String sql = "SELECT a.*, u.nombre as nombre_usuario, u.email as email_usuario, ? as id_entrenador_usuario " +
+                "FROM asigna a JOIN usuario u ON a.id_usuario = u.id_usuario " +
+                "WHERE a.id_entrenador = ? AND a.estado = 'pendiente' ORDER BY a.fecha_solicitud DESC";
 
         try (Connection c = getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
-            p.setInt(1, idEntrenadorReal);
+            p.setInt(1, idEntrenadorUsuario); // Para el mapeo en el controlador
+            p.setInt(2, idEntrenadorReal);
             ResultSet rs = p.executeQuery();
             while (rs.next()) {
                 lista.add(mapAsignacion(rs));
@@ -140,66 +147,40 @@ public class GestorBD {
         return lista;
     }
 
-    // Actualizar el estado de una solicitud
+    // Usando Procedimiento Almacenado sp_actualizar_estado_asignacion
     public static boolean actualizarEstadoSolicitud(int idUsuario, int idEntrenadorUsuario, String estado)
             throws SQLException {
-        try (Connection c = getConnection()) {
-
-            int idEntrenadorReal = -1;
-            try (PreparedStatement pGet = c
-                    .prepareStatement("SELECT id_entrenador FROM entrenador WHERE id_usuario = ?")) {
-                pGet.setInt(1, idEntrenadorUsuario);
-                ResultSet rs = pGet.executeQuery();
-                if (rs.next()) {
-                    idEntrenadorReal = rs.getInt("id_entrenador");
-                }
-            }
-
-            if (idEntrenadorReal == -1) {
-                return false;
-            }
-
-            try (PreparedStatement p = c.prepareStatement(
-                    "UPDATE asigna SET estado = ? WHERE id_usuario = ? AND id_entrenador = ?")) {
-                p.setString(1, estado);
-                p.setInt(2, idUsuario);
-                p.setInt(3, idEntrenadorReal);
-                return p.executeUpdate() > 0;
-            }
+        String sql = "{CALL sp_actualizar_estado_asignacion(?, ?, ?)}";
+        try (Connection c = getConnection(); CallableStatement cs = c.prepareCall(sql)) {
+            cs.setInt(1, idUsuario);
+            cs.setInt(2, idEntrenadorUsuario);
+            cs.setString(3, estado);
+            
+            cs.execute();
+            ResultSet rs = cs.getResultSet();
+            return rs.next() && rs.getInt("filas_actualizadas") > 0;
         }
     }
 
-    // Verificar si existe una solicitud pendiente
-    public static boolean existeSolicitudPendiente(int idUsuario, int idEntrenador) throws SQLException {
+    public static boolean existeSolicitudPendiente(int idUsuario, int idEntrenadorUsuario) throws SQLException {
+        int idEntrenadorReal = obtenerIdEntrenadorReal(idEntrenadorUsuario);
+        if (idEntrenadorReal == -1) return false;
+
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement(
                         "SELECT COUNT(*) FROM asigna " +
                                 "WHERE id_usuario = ? AND id_entrenador = ? AND estado = 'pendiente'")) {
             p.setInt(1, idUsuario);
-            p.setInt(2, idEntrenador);
+            p.setInt(2, idEntrenadorReal);
             ResultSet rs = p.executeQuery();
             return rs.next() && rs.getInt(1) > 0;
         }
     }
 
-    // Obtener usuarios asignados a un entrenador
     public static List<Usuario> obtenerUsuariosPorEntrenador(int idEntrenadorUsuario) throws SQLException {
         List<Usuario> lista = new ArrayList<>();
-
-        int idEntrenadorReal = -1;
-        try (Connection c = getConnection();
-                PreparedStatement pGet = c
-                        .prepareStatement("SELECT id_entrenador FROM entrenador WHERE id_usuario = ?")) {
-            pGet.setInt(1, idEntrenadorUsuario);
-            ResultSet rs = pGet.executeQuery();
-            if (rs.next()) {
-                idEntrenadorReal = rs.getInt("id_entrenador");
-            }
-        }
-
-        if (idEntrenadorReal == -1) {
-            return lista;
-        }
+        int idEntrenadorReal = obtenerIdEntrenadorReal(idEntrenadorUsuario);
+        if (idEntrenadorReal == -1) return lista;
 
         String sql = "SELECT u.* FROM usuario u JOIN asigna a ON u.id_usuario = a.id_usuario " +
                 "WHERE a.id_entrenador = ? AND a.estado = 'activa' AND u.activo = TRUE";
@@ -214,38 +195,25 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener todos los usuarios
-    public static List<Usuario> obtenerTodosUsuarios() throws SQLException {
-        List<Usuario> lista = new ArrayList<>();
-        try (Connection c = getConnection();
-                Statement s = c.createStatement();
-                ResultSet rs = s.executeQuery("SELECT * FROM usuario WHERE activo=TRUE")) {
-            while (rs.next())
-                lista.add(mapUsuario(rs));
-        }
-        return lista;
-    }
-
     // Rutinas
     public static boolean crearRutina(Rutina r) throws SQLException {
-        try (Connection c = getConnection();
-                PreparedStatement p = c.prepareStatement(
-                        "INSERT INTO rutina (nombre, descripcion, id_usuario_creador) VALUES (?,?,?)",
-                        Statement.RETURN_GENERATED_KEYS)) {
-            p.setString(1, r.getNombre());
-            p.setString(2, r.getDescripcion());
-            p.setInt(3, r.getIdUsuarioCreador());
-            if (p.executeUpdate() > 0) {
-                ResultSet rs = p.getGeneratedKeys();
-                if (rs.next())
-                    r.setIdRutina(rs.getInt(1));
+        String sql = "{CALL sp_crear_rutina(?, ?, ?)}";
+        try (Connection c = getConnection(); 
+             CallableStatement cs = c.prepareCall(sql)) {
+            cs.setString(1, r.getNombre());
+            cs.setString(2, r.getDescripcion());
+            cs.setInt(3, r.getIdUsuarioCreador());
+            
+            cs.execute();
+            ResultSet rs = cs.getResultSet();
+            if (rs.next()) {
+                r.setIdRutina(rs.getInt("id_rutina"));
                 return true;
             }
         }
         return false;
     }
 
-    // Obtener rutinas creadas por un usuario
     public static List<Rutina> obtenerRutinasPorUsuario(int idUsuario) throws SQLException {
         List<Rutina> lista = new ArrayList<>();
         try (Connection c = getConnection();
@@ -259,25 +227,10 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener rutinas de los clientes asignados a un entrenador
-    public static List<Rutina> obtenerRutinasDeMisClientes(int idEntrenador) throws SQLException {
+    public static List<Rutina> obtenerRutinasDeMisClientes(int idEntrenadorUsuario) throws SQLException {
         List<Rutina> lista = new ArrayList<>();
-
-       
-        int idEntrenadorReal = -1;
-        try (Connection c = getConnection();
-                PreparedStatement pGet = c
-                        .prepareStatement("SELECT id_entrenador FROM entrenador WHERE id_usuario = ?")) {
-            pGet.setInt(1, idEntrenador);
-            ResultSet rs = pGet.executeQuery();
-            if (rs.next()) {
-                idEntrenadorReal = rs.getInt("id_entrenador");
-            }
-        }
-
-        if (idEntrenadorReal == -1) {
-            return lista; 
-        }
+        int idEntrenadorReal = obtenerIdEntrenadorReal(idEntrenadorUsuario);
+        if (idEntrenadorReal == -1) return lista;
 
         String sql = "SELECT r.* FROM rutina r " +
                 "JOIN usuario u ON r.id_usuario_creador = u.id_usuario " +
@@ -295,7 +248,6 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener rutina por su ID
     public static Rutina obtenerRutinaPorId(int id) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement("SELECT * FROM rutina WHERE id_rutina=?")) {
@@ -305,7 +257,6 @@ public class GestorBD {
         }
     }
 
-    // Eliminar una rutina por su ID
     public static boolean eliminarRutina(int id) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement("DELETE FROM rutina WHERE id_rutina=?")) {
@@ -326,7 +277,6 @@ public class GestorBD {
         return lista;
     }
 
-    // Crear un nuevo ejercicio general
     public static boolean crearEjercicioGeneral(Ejercicio e) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement(
@@ -356,7 +306,6 @@ public class GestorBD {
         return lista;
     }
 
-    // Agregar un ejercicio a una rutina
     public static boolean agregarEjercicioARutina(EjercicioRutina er) throws SQLException {
         String sql = "INSERT INTO ejercicio_rutina (id_rutina, id_ejercicio, series_planificadas, repeticiones_planificadas, peso_recomendado, descanso_segundos, orden) VALUES (?,?,?,?,?,?,?)";
         try (Connection c = getConnection();
@@ -378,7 +327,6 @@ public class GestorBD {
         return false;
     }
 
-    // Eliminar un ejercicio de una rutina
     public static boolean eliminarEjercicioDeRutina(int id) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement("DELETE FROM ejercicio_rutina WHERE id_ejercicio_rutina=?")) {
@@ -387,7 +335,6 @@ public class GestorBD {
         }
     }
 
-    // Obtener ejercicios de las rutinas creadas por un usuario
     public static List<Ejercicio> obtenerEjerciciosDeMisRutinas(int idUsuario) throws SQLException {
         List<Ejercicio> lista = new ArrayList<>();
         String sql = "SELECT DISTINCT e.* FROM ejercicio e JOIN ejercicio_rutina er ON e.id_ejercicio = er.id_ejercicio JOIN rutina r ON er.id_rutina = r.id_rutina WHERE r.id_usuario_creador = ? ORDER BY e.nombre";
@@ -400,35 +347,7 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener ejercicios de las rutinas de los clientes asignados a un entrenador
-    public static List<Ejercicio> obtenerEjerciciosDeClientes(int idEntrenador) throws SQLException {
-        List<Ejercicio> lista = new ArrayList<>();
-        String sql = "SELECT DISTINCT ej.* FROM ejercicio ej " +
-                "JOIN ejercicio_rutina er ON ej.id_ejercicio = er.id_ejercicio " +
-                "JOIN rutina r ON er.id_rutina = r.id_rutina " +
-                "JOIN usuario u ON r.id_usuario_creador = u.id_usuario " +
-                "JOIN asigna a ON u.id_usuario = a.id_usuario " +
-                "WHERE a.id_entrenador = ? AND a.estado = 'activa' ORDER BY ej.nombre";
-        try (Connection c = getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
-            p.setInt(1, idEntrenador);
-            ResultSet rs = p.executeQuery();
-            while (rs.next())
-                lista.add(mapEjercicio(rs));
-        }
-        return lista;
-    }
-
     // Entrenamientos y Ejecuciones
-    public static boolean registrarEntrenador(int idUsuario) throws SQLException {
-        try (Connection c = getConnection();
-                PreparedStatement p = c.prepareStatement(
-                        "INSERT INTO entrenador (id_usuario, especialidad) VALUES (?, 'Entrenador personal')")) {
-            p.setInt(1, idUsuario);
-            return p.executeUpdate() > 0;
-        }
-    }
-
-    // Registrar un nuevo entrenamiento
     public static boolean registrarEntrenamiento(Entrenamiento e) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement(
@@ -448,7 +367,6 @@ public class GestorBD {
         return false;
     }
 
-    // Registrar una ejecución de ejercicio dentro de un entrenamiento
     public static boolean registrarEjecucion(Ejecuta ex) throws SQLException {
         try (Connection c = getConnection();
                 PreparedStatement p = c.prepareStatement(
@@ -464,7 +382,6 @@ public class GestorBD {
         }
     }
 
-    // Obtener entrenamientos de un usuario
     public static List<Entrenamiento> obtenerEntrenamientosPorUsuario(int idUsuario) throws SQLException {
         List<Entrenamiento> lista = new ArrayList<>();
         try (Connection c = getConnection();
@@ -478,23 +395,6 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener entrenamientos de los clientes asignados a un entrenador
-    public static List<Entrenamiento> obtenerEntrenamientosDeMisClientes(int idEntrenador) throws SQLException {
-        List<Entrenamiento> lista = new ArrayList<>();
-        String sql = "SELECT e.* FROM entrenamiento e " +
-                "JOIN usuario u ON e.id_usuario = u.id_usuario " +
-                "JOIN asigna a ON u.id_usuario = a.id_usuario " +
-                "WHERE a.id_entrenador = ? AND a.estado = 'activa' ORDER BY e.fecha_entrenamiento DESC";
-        try (Connection c = getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
-            p.setInt(1, idEntrenador);
-            ResultSet rs = p.executeQuery();
-            while (rs.next())
-                lista.add(mapEntrenamiento(rs));
-        }
-        return lista;
-    }
-
-    // Obtener ejecuciones de un entrenamiento
     public static List<Ejecuta> obtenerEjecucionesDeEntrenamiento(int idEntrenamiento) throws SQLException {
         List<Ejecuta> lista = new ArrayList<>();
         String sql = "SELECT ex.*, e.nombre as ejercicio_nombre FROM ejecuta ex " +
@@ -520,7 +420,6 @@ public class GestorBD {
         return lista;
     }
 
-    // Obtener progreso de un ejercicio específico para un usuario
     public static List<ProgresoEjercicio> obtenerProgresoEjercicio(int idUsuario, int idEjercicio) throws SQLException {
         List<ProgresoEjercicio> lista = new ArrayList<>();
         String sql = "SELECT ej.fecha_entrenamiento, ex.series_reales, ex.repeticiones_reales, ex.peso_real FROM ejecuta ex JOIN entrenamiento ej ON ex.id_entrenamiento = ej.id_entrenamiento JOIN ejercicio_rutina er ON ex.id_ejercicio_rutina = er.id_ejercicio_rutina WHERE ej.id_usuario = ? AND er.id_ejercicio = ? ORDER BY ej.fecha_entrenamiento DESC";
@@ -539,8 +438,8 @@ public class GestorBD {
         }
         return lista;
     }
-
-    // Mapeos de las Entidades
+    
+    // Mapeos de las Entidades (Sin cambios funcionales, solo para referencia)
     private static Usuario mapUsuario(ResultSet rs) throws SQLException {
         Usuario u = new Usuario();
         u.setIdUsuario(rs.getInt("id_usuario"));
@@ -602,6 +501,10 @@ public class GestorBD {
         a.setIdAsignacion(rs.getInt("id_asignacion"));
         a.setIdUsuario(rs.getInt("id_usuario"));
         a.setIdEntrenador(rs.getInt("id_entrenador"));
+        
+        int idEntrenadorUsuario = obtenerIdEntrenadorUsuario(a.getIdEntrenador());
+        a.setIdEntrenadorUsuario(idEntrenadorUsuario);
+        
         a.setIdRutina(rs.getInt("id_rutina"));
         a.setEstado(rs.getString("estado"));
         a.setFechaSolicitud(

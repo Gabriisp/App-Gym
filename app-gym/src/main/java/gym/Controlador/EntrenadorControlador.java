@@ -79,11 +79,13 @@ public class EntrenadorControlador {
                 Entidades.Asignacion solicitud = solicitudes.get(solicitudSeleccionada);
 
                 int accion = vistaEntrenador.mostrarOpcionesSolicitud(solicitud);
-
+                boolean resultado = false;
+                
                 switch (accion) {
-                    case 0:
-                        if (GestorBD.actualizarEstadoSolicitud(solicitud.getIdUsuario(), entrenador.getIdUsuario(),
-                                "activa")) {
+                    case 0: 
+                        resultado = GestorBD.actualizarEstadoSolicitud(solicitud.getIdUsuario(), entrenador.getIdUsuario(),
+                                "activa");
+                        if (resultado) {
                             vistaEntrenador.mostrarMensaje(
                                     "¡Solicitud aceptada! Ahora " + solicitud.getNombreUsuario() + " es tu cliente.");
                         } else {
@@ -91,9 +93,10 @@ public class EntrenadorControlador {
                         }
                         break;
 
-                    case 1:
-                        if (GestorBD.actualizarEstadoSolicitud(solicitud.getIdUsuario(), entrenador.getIdUsuario(),
-                                "rechazada")) {
+                    case 1: 
+                        resultado = GestorBD.actualizarEstadoSolicitud(solicitud.getIdUsuario(), entrenador.getIdUsuario(),
+                                "rechazada");
+                        if (resultado) {
                             vistaEntrenador.mostrarMensaje("Solicitud rechazada.");
                         } else {
                             vistaEntrenador.mostrarError("Error al rechazar la solicitud.");
@@ -105,7 +108,7 @@ public class EntrenadorControlador {
                 }
             }
         } catch (SQLException e) {
-            vistaEntrenador.mostrarError("Error: " + e.getMessage());
+            vistaEntrenador.mostrarError("Error de BD al gestionar solicitudes: " + e.getMessage());
         }
     }
 
@@ -125,8 +128,6 @@ public class EntrenadorControlador {
                 } else {
                     vistaEntrenador.mostrarError("Error al guardar el ejercicio.");
                 }
-            } else {
-                vistaEntrenador.mostrarError("El nombre del ejercicio no puede estar vacío");
             }
         } catch (SQLException e) {
             vistaEntrenador.mostrarError("Error BD: " + e.getMessage());
@@ -148,7 +149,6 @@ public class EntrenadorControlador {
             if (usuarioSeleccionado >= 0 && usuarioSeleccionado < usuarios.size()) {
                 Entidades.Usuario cliente = usuarios.get(usuarioSeleccionado);
 
-                // Obtener rutinas del cliente seleccionado
                 List<Entidades.Rutina> rutinasCliente = GestorBD.obtenerRutinasPorUsuario(cliente.getIdUsuario());
 
                 if (rutinasCliente.isEmpty()) {
@@ -156,25 +156,11 @@ public class EntrenadorControlador {
                     return;
                 }
 
-                // Mostrar las rutinas del cliente
-                StringBuilder sb = new StringBuilder();
-                sb.append("RUTINAS DEL CLIENTE: ").append(cliente.getNombre()).append("\n\n");
-
-                for (Entidades.Rutina rutina : rutinasCliente) {
-                    sb.append("• ").append(rutina.getNombre())
-                            .append(" - ").append(rutina.getDescripcion())
-                            .append("\n   Creada: ").append(rutina.getFechaCreacion().toLocalDate())
-                            .append(" | Activa: ").append(rutina.isActiva() ? "Sí" : "No")
-                            .append("\n\n");
-                }
-
-                // Mostrar opciones para ver ejercicios de alguna rutina
                 int opcionRutina = vistaEntrenador.mostrarSeleccionRutinaConOpciones(rutinasCliente);
 
                 if (opcionRutina >= 0 && opcionRutina < rutinasCliente.size()) {
                     Entidades.Rutina rutinaSeleccionada = rutinasCliente.get(opcionRutina);
 
-                    // Mostrar ejercicios de la rutina seleccionada
                     RutinaControlador rutinaCtrl = new RutinaControlador();
                     rutinaCtrl.mostrarEjerciciosRutina(rutinaSeleccionada.getIdRutina());
                 }
@@ -233,9 +219,79 @@ public class EntrenadorControlador {
             List<Entidades.Ejercicio> ejerciciosCliente = GestorBD
                     .obtenerEjerciciosDeMisRutinas(cliente.getIdUsuario());
 
-            vistaEntrenador.mostrarProgresoCompletoCliente(entrenamientos, ejerciciosCliente, cliente);
+            String historial = generarHistorial(entrenamientos);
+            String progresoDetallado = generarProgresoDetallado(cliente, ejerciciosCliente);
+            
+            vistaEntrenador.mostrarProgresoCompletoCliente(historial, progresoDetallado);
         }
     }
+    
+    // Método auxiliar para generar el historial de entrenamientos
+    private String generarHistorial(List<Entidades.Entrenamiento> entrenamientos) {
+        StringBuilder sbEntrenamientos = new StringBuilder();
+        sbEntrenamientos.append("HISTORIAL COMPLETO DE ENTRENAMIENTOS\n");
+        sbEntrenamientos.append("=".repeat(60)).append("\n\n");
+
+        int totalEntrenamientos = entrenamientos.size();
+        double totalHoras = entrenamientos.stream().mapToDouble(Entidades.Entrenamiento::getDuracionHoras).sum();
+        double promedioHoras = totalEntrenamientos > 0 ? totalHoras / totalEntrenamientos : 0;
+
+        sbEntrenamientos.append("RESUMEN: ").append(totalEntrenamientos).append(" entrenamientos | ")
+                .append(String.format("%.1f", totalHoras)).append(" horas totales | ")
+                .append(String.format("%.1f", promedioHoras)).append(" horas promedio\n\n");
+
+        for (Entidades.Entrenamiento e : entrenamientos) {
+            sbEntrenamientos.append(" ").append(e.getFechaEntrenamiento().toLocalDate()).append("\n");
+            sbEntrenamientos.append("Duración: ").append(String.format("%.2f", e.getDuracionHoras()))
+                    .append(" horas\n");
+            sbEntrenamientos.append("Notas: ").append(e.getNotas() != null ? e.getNotas() : "Sin notas").append("\n");
+            sbEntrenamientos.append("    ").append("-".repeat(40)).append("\n\n");
+        }
+        return sbEntrenamientos.toString();
+    }
+    
+    // Método auxiliar para generar el progreso detallado por ejercicio
+    private String generarProgresoDetallado(Entidades.Usuario cliente, List<Entidades.Ejercicio> ejerciciosCliente) throws SQLException {
+        StringBuilder sbProgreso = new StringBuilder();
+        sbProgreso.append("PROGRESO DETALLADO POR EJERCICIO - ").append(cliente.getNombre()).append("\n");
+        sbProgreso.append("=".repeat(80)).append("\n\n");
+        
+        for (Entidades.Ejercicio ejercicio : ejerciciosCliente) {
+            List<Entidades.ProgresoEjercicio> progreso = GestorBD.obtenerProgresoEjercicio(
+                    cliente.getIdUsuario(), ejercicio.getIdEjercicio());
+            
+            sbProgreso.append("EJERCICIO: ").append(ejercicio.getNombre()).append(" (").append(progreso.size()).append(" registros)\n");
+            
+            if (progreso.isEmpty()) {
+                sbProgreso.append("  No hay registros para este ejercicio.\n\n");
+                continue;
+            }
+            
+            sbProgreso.append(String.format("  %-12s | %-10s | %-12s | %-8s\n",
+                    "FECHA", "PESO (kg)", "REPETICIONES", "SERIES"));
+            sbProgreso.append("  ").append("-".repeat(70)).append("\n");
+
+            for (Entidades.ProgresoEjercicio p : progreso) {
+                sbProgreso.append(String.format("  %-12s | %-10.1f | %-12d | %-8d\n",
+                        p.getFecha().toLocalDate(),
+                        p.getPesoReal(),
+                        p.getRepeticionesReales(),
+                        p.getSeriesReales()));
+            }
+
+            if (progreso.size() > 1) {
+                Entidades.ProgresoEjercicio primera = progreso.get(progreso.size() - 1);  
+                Entidades.ProgresoEjercicio ultima = progreso.get(0);
+
+                double mejoraPeso = ultima.getPesoReal() - primera.getPesoReal();
+                sbProgreso.append("  Mejora de Peso: ").append(String.format("%.1f", mejoraPeso)).append("kg\n");
+            }
+            sbProgreso.append("\n");
+        }
+        
+        return sbProgreso.toString();
+    }
+
 
     // Ver un resumen general del progreso de todos los clientes
     private void verResumenGeneralClientes(List<Entidades.Usuario> usuarios) throws SQLException {
@@ -244,34 +300,33 @@ public class EntrenadorControlador {
         resumen.append("=".repeat(50)).append("\n\n");
 
         for (Entidades.Usuario cliente : usuarios) {
-            if ("usuario".equals(cliente.getTipo())) {
-                List<Entidades.Entrenamiento> entrenamientos = GestorBD
-                        .obtenerEntrenamientosPorUsuario(cliente.getIdUsuario());
-                List<Entidades.Ejercicio> ejercicios = GestorBD.obtenerEjerciciosDeMisRutinas(cliente.getIdUsuario());
+            
+            List<Entidades.Entrenamiento> entrenamientos = GestorBD
+                    .obtenerEntrenamientosPorUsuario(cliente.getIdUsuario());
+            List<Entidades.Ejercicio> ejercicios = GestorBD.obtenerEjerciciosDeMisRutinas(cliente.getIdUsuario());
 
-                resumen.append("CLIENTE: ").append(cliente.getNombre()).append("\n");
-                resumen.append("- Total entrenamientos: ").append(entrenamientos.size()).append("\n");
+            resumen.append("CLIENTE: ").append(cliente.getNombre()).append("\n");
+            resumen.append("- Total entrenamientos: ").append(entrenamientos.size()).append("\n");
 
-                if (!entrenamientos.isEmpty()) {
-                    double totalHoras = entrenamientos.stream()
-                            .mapToDouble(Entidades.Entrenamiento::getDuracionHoras).sum();
-                    double promedioHoras = totalHoras / entrenamientos.size();
-                    resumen.append("- Horas totales: ").append(String.format("%.1f", totalHoras)).append(" horas\n");
-                    resumen.append("- Promedio por sesión: ").append(String.format("%.1f", promedioHoras))
-                            .append(" horas\n");
-                    resumen.append("- Último entrenamiento: ")
-                            .append(entrenamientos.get(0).getFechaEntrenamiento().toLocalDate()).append("\n");
-                }
-
-                resumen.append("- Ejercicios diferentes: ").append(ejercicios.size()).append("\n");
-                resumen.append("- Grupos musculares trabajados: ");
-                ejercicios.stream()
-                        .map(Entidades.Ejercicio::getGrupoMuscular)
-                        .distinct()
-                        .forEach(grupo -> resumen.append(grupo).append(" "));
-                resumen.append("\n");
-                resumen.append("-".repeat(40)).append("\n\n");
+            if (!entrenamientos.isEmpty()) {
+                double totalHoras = entrenamientos.stream()
+                        .mapToDouble(Entidades.Entrenamiento::getDuracionHoras).sum();
+                double promedioHoras = totalHoras / entrenamientos.size();
+                resumen.append("- Horas totales: ").append(String.format("%.1f", totalHoras)).append(" horas\n");
+                resumen.append("- Promedio por sesión: ").append(String.format("%.1f", promedioHoras))
+                        .append(" horas\n");
+                resumen.append("- Último entrenamiento: ")
+                        .append(entrenamientos.get(0).getFechaEntrenamiento().toLocalDate()).append("\n");
             }
+
+            resumen.append("- Ejercicios diferentes: ").append(ejercicios.size()).append("\n");
+            resumen.append("- Grupos musculares trabajados: ");
+            ejercicios.stream()
+                    .map(Entidades.Ejercicio::getGrupoMuscular)
+                    .distinct()
+                    .forEach(grupo -> resumen.append(grupo).append(" "));
+            resumen.append("\n");
+            resumen.append("-".repeat(40)).append("\n\n");
         }
 
         vistaEntrenador.mostrarResumenGeneral(resumen.toString());
@@ -301,16 +356,14 @@ public class EntrenadorControlador {
                     nuevaRutina.setIdEntrenadorAsignador(entrenador.getIdUsuario());
 
                     if (GestorBD.crearRutina(nuevaRutina)) {
-                        vistaEntrenador.mostrarMensaje("¡Rutina creada exitosamente!");
+                        vistaEntrenador.mostrarMensaje("¡Rutina creada exitosamente para " + usuarioCliente.getNombre() + "!");
                     } else {
                         vistaEntrenador.mostrarError("Error al crear la rutina");
                     }
-                } else {
-                    vistaEntrenador.mostrarError("El nombre de la rutina no puede estar vacío");
                 }
             }
         } catch (SQLException e) {
-            vistaEntrenador.mostrarError("Error: " + e.getMessage());
+            vistaEntrenador.mostrarError("Error al crear rutina: " + e.getMessage());
         }
     }
 
@@ -375,9 +428,7 @@ public class EntrenadorControlador {
 
     private void mostrarEjerciciosRutina(Entidades.Rutina rutina) {
         try {
-            RutinaControlador rutinaCtrl = new RutinaControlador();
-            rutinaCtrl.mostrarEjerciciosRutina(rutina.getIdRutina());
-
+            new RutinaControlador().mostrarEjerciciosRutina(rutina.getIdRutina());
         } catch (Exception e) {
             vistaEntrenador.mostrarError("Error al cargar ejercicios: " + e.getMessage());
         }
@@ -386,8 +437,7 @@ public class EntrenadorControlador {
     // Agregar ejercicios a una rutina existente
     private void agregarEjerciciosARutina(Entidades.Rutina rutina) {
         try {
-            RutinaControlador rutinaCtrl = new RutinaControlador();
-            rutinaCtrl.mostrarEjerciciosRutina(rutina.getIdRutina());
+            new RutinaControlador().mostrarEjerciciosRutina(rutina.getIdRutina()); 
 
             List<Entidades.Ejercicio> ejerciciosDisponibles = GestorBD.obtenerTodosEjercicios();
             boolean continuar = true;
@@ -397,6 +447,7 @@ public class EntrenadorControlador {
 
                 if (datosEjercicio != null) {
                     int ejercicioIndex = Integer.parseInt(datosEjercicio[0]);
+                    
                     if (ejercicioIndex >= 0 && ejercicioIndex < ejerciciosDisponibles.size()) {
                         Entidades.Ejercicio ejercicioSeleccionado = ejerciciosDisponibles.get(ejercicioIndex);
 
@@ -423,7 +474,7 @@ public class EntrenadorControlador {
                 }
             }
         } catch (Exception e) {
-            vistaEntrenador.mostrarError("Error: " + e.getMessage());
+            vistaEntrenador.mostrarError("Error al agregar ejercicios: " + e.getMessage());
         }
     }
 
@@ -448,7 +499,7 @@ public class EntrenadorControlador {
                 }
             }
         } catch (SQLException e) {
-            vistaEntrenador.mostrarError("Error: " + e.getMessage());
+            vistaEntrenador.mostrarError("Error al eliminar ejercicio: " + e.getMessage());
         }
     }
 
@@ -475,7 +526,7 @@ public class EntrenadorControlador {
                 }
             }
         } catch (SQLException e) {
-            vistaEntrenador.mostrarError("Error: " + e.getMessage());
+            vistaEntrenador.mostrarError("Error al eliminar rutina: " + e.getMessage());
         }
     }
 }
